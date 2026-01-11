@@ -112,7 +112,7 @@ class MyLineReg():
         X = np.insert(arr=X_input.to_numpy(), obj=0, values=1, axis=1)
         y_pred = np.matmul(X, self.weights)
 
-        return y_pred
+        return pd.Series(y_pred[:, 0])
     
     def get_best_score(self):
         return self.best_score

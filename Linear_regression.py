@@ -93,7 +93,7 @@ class MyLineReg():
                 else:
                     log_learning_rate = ""
                 
-                if i == 0:
+                if i == 1:
                     print("start", log_metric, log_learning_rate)
                 elif i % verbose == 0:
                     print(i, log_metric, log_learning_rate)

@@ -125,7 +125,7 @@ class MyLogReg():
         # Расчёт сумм в формуле AUC
         ones_before = 0             # Количество единиц перед текущей i-позицией и выше скором. yi < yj, ai < aj
         ones_score = y_true[0]      # Количество единиц перед текущей позицией с таким же скором. yi < yj, ai = aj
-        zeros_score = 0
+        zeros_score = 1 - y_true[0]
         sum_total = 0               # Общая сумма, которая складывается из единиц (yi < yj, ai < aj) и 0,5*единиц (yi < yj, ai = aj)
         # score = 2                 # Скор на предыдущей позиции. 2 - чтобы начать итерацию.
 
@@ -133,21 +133,21 @@ class MyLogReg():
             current = sorted_indices[position]   # Индекс в исходных массивах
             previous = sorted_indices[position - 1]
             
-            if y_true[current] == 0:
-                if y_predict_proba[current] == y_predict_proba[previous]:
+            if y_predict_proba[current] == y_predict_proba[previous]:   # В группе одного скора
+                if y_true[current] == 0:
                     zeros_score += 1
                 else:
-                    sum_total += (ones_before + 0.5 * ones_score ) * zeros_score   # Если попали в 0 после группы одного скора
-                    ones_before += ones_score
-                    ones_score = 0  # либо y_true[current]
-                    zeros_score = 0
+                    ones_score += 1
             else:
-                if y_predict_proba[current] == y_predict_proba[previous]:
-                    ones_score += 1  # y_true[previous] всё таки current
-                else:   # т.е. текущий скор меньше предыдущего
-                    sum_total += (ones_before + 0.5 * ones_score) * zeros_score     # Если попали в 1 после группы одного скора
-                    ones_before += ones_score
-                    ones_score = 1      # либо y_true[current]
+                if ones_score * zeros_score:    # Если вышли из группы одного скора, то zeros_score и ones_score != 0
+                    sum_total += (ones_before + 0.5 * ones_score ) * zeros_score
+                ones_before += ones_score
+                if y_true[current] == 0:
+                    sum_total += ones_before
+                    zeros_score = 1
+                    ones_score = 0
+                else:
+                    ones_score = 1
                     zeros_score = 0
 
         return sum_total / (P * N)

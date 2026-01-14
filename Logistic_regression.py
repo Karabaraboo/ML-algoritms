@@ -123,31 +123,37 @@ class MyLogReg():
         sorted_indices = np.argsort(-y_predict_proba)      # По убыванию
         
         # Расчёт сумм в формуле AUC
-        ones_before = 0             # Количество единиц перед текущей i-позицией и выше скором. yi < yj, ai < aj
-        ones_score = y_true[0]      # Количество единиц перед текущей позицией с таким же скором. yi < yj, ai = aj
-        zeros_score = 1 - y_true[0]
-        sum_total = 0               # Общая сумма, которая складывается из единиц (yi < yj, ai < aj) и 0,5*единиц (yi < yj, ai = aj)
-        # score = 2                 # Скор на предыдущей позиции. 2 - чтобы начать итерацию.
-
-        for position in range(1, len(sorted_indices)):
-            current = sorted_indices[position]   # Индекс в исходных массивах
-            previous = sorted_indices[position - 1]
+        ones_before = 0
+        ones_group = 0
+        zeros_group = 0
+        sum_total = 0
+        i = 0
+        while i < len(sorted_indices) - 1:
+            current = sorted_indices[i]
+            next = sorted_indices[i + 1] if i < len(sorted_indices) - 2 else None
             
-            if y_predict_proba[current] == y_predict_proba[previous]:   # В группе одного скора
-                if y_true[current] == 0:
-                    zeros_score += 1
+            if next and y_predict_proba[current] == y_predict_proba[next]:       # В группе с одним скором
+                if y_true[current] == 0:                                # Запоминаем текущее число
+                    zeros_group += 1
                 else:
-                    ones_score += 1
+                    ones_group += 1
+                while y_predict_proba[current] == y_predict_proba[next]:    # Проходим по группе, меняя next
+                    if y_true[next] == 0:                                   # Считаем нули и единицы
+                        zeros_group += 1
+                    else:
+                        ones_group += 1
+                    i += 1
+                    next = sorted_indices[i + 1]
+                
+                sum_total += (ones_before + 0.5 * ones_group) * zeros_group
+                ones_before += ones_group
+                ones_group = 0
+                zeros_group = 0
             else:
-                if ones_score * zeros_score:    # Если вышли из группы одного скора, то zeros_score и ones_score != 0
-                    sum_total += (ones_before + 0.5 * ones_score ) * zeros_score
-                ones_before += ones_score
                 if y_true[current] == 0:
                     sum_total += ones_before
-                    zeros_score = 1
-                    ones_score = 0
                 else:
-                    ones_score = 1
-                    zeros_score = 0
+                    ones_before += 1
+            i += 1
 
         return sum_total / (P * N)

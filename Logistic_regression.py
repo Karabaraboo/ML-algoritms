@@ -11,6 +11,7 @@ class MyLogReg():
         self.learning_rate = learning_rate
         self.weights = None     # Хранение весов модели
         self.metric = metric    # accuracy, precision, recall, f1, roc_auc
+        self.best_score = None
     
     def __str__(self):
         return f"MyLogReg class: n_iter={self.n_iter}, learning_rate={self.learning_rate}"
@@ -48,13 +49,20 @@ class MyLogReg():
                     log_metric = ""
                     if self.metric:
                         metric_function = getattr(self, self.metric)
-                        if self.metric == "roc auc":
+                        if self.metric == "roc_auc":
                             metric = metric_function(self.predict_proba(X_df), y_ser)
                         else:
                             metric = metric_function(self.predict(X_df), y_ser)
                         log_metric = f"| {self.metric}: {metric} "
 
                     print(log_start, log_loss, log_metric)
+        
+        if self.metric:
+            metric_function = getattr(self, self.metric)
+            if self.metric == "roc_auc":
+                self.best_score = metric_function(self.predict_proba(X_df), y_ser)
+            else:
+                self.best_score = metric_function(self.predict(X_df), y_ser)
 
     def get_coef(self):
         return self.weights[1:]
@@ -69,6 +77,9 @@ class MyLogReg():
         predict_proba[predict_proba > 0.5] = 1
         predict_proba[predict_proba <= 0.5] = 0
         return predict_proba.astype(int)
+    
+    def get_best_score(self):
+        return self.best_score
     
     # Вычисление метрик
     @staticmethod
@@ -105,7 +116,7 @@ class MyLogReg():
     def f1(y_predict: pd.Series, y_true: pd.Series):
         # f1 = 2 * precison * recall / (precision + recall)
         precision = MyLogReg.precision(y_predict, y_true)
-        recall = MyLogReg.precision(y_predict, y_true)
+        recall = MyLogReg.recall(y_predict, y_true)
         return 2 * precision * recall / (precision + recall)
     
     @staticmethod
@@ -128,9 +139,19 @@ class MyLogReg():
         zeros_group = 0
         sum_total = 0
         i = 0
-        while i < len(sorted_indices) - 1:
-            current = sorted_indices[i]
-            next = sorted_indices[i + 1] if i < len(sorted_indices) - 2 else None
+        while True:
+            if i >= len(sorted_indices):
+                break
+            else:
+                current = sorted_indices[i]
+                if i == len(sorted_indices) - 1:
+                    # if y_true[current] == 0:
+                    #     sum_total += ones_before
+                    # break
+                    next = None
+                else:
+                    current = sorted_indices[i]
+                    next = sorted_indices[i + 1]
             
             if next and y_predict_proba[current] == y_predict_proba[next]:       # В группе с одним скором
                 if y_true[current] == 0:                                # Запоминаем текущее число
@@ -143,17 +164,21 @@ class MyLogReg():
                     else:
                         ones_group += 1
                     i += 1
-                    next = sorted_indices[i + 1]
+                    if i >= len(sorted_indices) - 1:
+                        break
+                    else:
+                        next = sorted_indices[i + 1]
                 
                 sum_total += (ones_before + 0.5 * ones_group) * zeros_group
                 ones_before += ones_group
                 ones_group = 0
                 zeros_group = 0
+                i += 1
             else:
                 if y_true[current] == 0:
                     sum_total += ones_before
                 else:
                     ones_before += 1
-            i += 1
+                i += 1
 
         return sum_total / (P * N)

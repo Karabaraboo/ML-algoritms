@@ -1,17 +1,28 @@
 import numpy as np
 import pandas as pd
+import random
 
 class MyLogReg():
     # Логистическая регрессия
     def __init__(self,
                  n_iter=10,
                  learning_rate=0.1,
-                 metric=None):
+                 metric=None,
+                 reg=None,              # Выполнение регуляризации весов. l1, l2, elasticnet
+                 l1_coef=0,             # Коэффициент L1-регуляризации [0.0, 1.0]
+                 l2_coef=0,             # Коэффициент L2-регуляризации [0.0, 1.0]
+                 sgd_sample=None,       # Количество образцов в батче при СГС. Если дробное - значит доля от общего числа
+                 random_state=42):   
         self.n_iter = n_iter
         self.learning_rate = learning_rate
         self.weights = None     # Хранение весов модели
         self.metric = metric    # accuracy, precision, recall, f1, roc_auc
         self.best_score = None
+        self.reg = reg
+        self.reg_l1 = l1_coef
+        self.reg_l2 = l2_coef
+        self.sgd_sample = sgd_sample
+        self.random_state = random_state
     
     def __str__(self):
         return f"MyLogReg class: n_iter={self.n_iter}, learning_rate={self.learning_rate}"
@@ -22,19 +33,42 @@ class MyLogReg():
         self.weights = np.ones((X.shape[1], 1))                         # (N_feat+1, 1)
 
         n = X.shape[0]
+
+        random.seed(self.random_state)
+        if self.sgd_sample:
+            batch_size = int(self.sgd_sample) if self.sgd_sample >= 1 else round(X.shape[0] * self.sgd_sample)
+        else:
+            batch_size = n
+
         for i in range(1, self.n_iter + 1):
+            # Строки батча
+            sample_rows_idx = random.sample(range(X.shape[0]), batch_size)
+
+            # Выборка в батче
+            X_batch = X[sample_rows_idx, :]   # Можно просто X[sample_rows_idx]
+            y_batch = y[sample_rows_idx, :]
+
             # Предсказание модели
             y_pred = 1 / (1 + np.exp(-np.matmul(X, self.weights)))      # (N, 1)
+            y_pred_batch = y_pred[sample_rows_idx]
 
             # Loss-функция
+            # Учёт регуляризации
+            regul, grad_regul = (0, 0)
+            if self.reg:
+                regul_function = getattr(self, self.reg)
+                regul, grad_regul = regul_function(self.weights, [self.reg_l1, self.reg_l2])
+
             eps = 1e-15   # Чтобы избежать +-inf в логарифме
-            logLoss = -1 / n * np.sum(y * np.log(y_pred + eps) + (1 - y) * np.log(y_pred + eps))
+            logLoss = -1 / n * np.sum(y * np.log(y_pred + eps) + (1 - y) * np.log(y_pred + eps)) + regul
 
             # Градиент loss-функции
-            grad = 1 / n * np.matmul((y_pred - y).T, X)                 # (1, N_feat+1)
+            grad = 1 / n * np.matmul((y_pred_batch - y_batch).T, X_batch).T + grad_regul     # (N_feat+1, 1)
 
             # Обновление весов
-            self.weights -= self.learning_rate * grad.T
+            # Определение скорости обучения, если она задана динамически
+            learning_rate = self.learning_rate(i) if callable(self.learning_rate) else self.learning_rate
+            self.weights -= learning_rate * grad
 
             # Вывод логов
             if verbose:
@@ -55,7 +89,12 @@ class MyLogReg():
                             metric = metric_function(self.predict(X_df), y_ser)
                         log_metric = f"| {self.metric}: {metric} "
 
-                    print(log_start, log_loss, log_metric)
+                    if callable(self.learning_rate):
+                        log_learning_rate = f"| learning_rate: {learning_rate}"
+                    else:
+                        log_learning_rate = ""
+
+                    print(log_start, log_loss, log_metric, log_learning_rate)
         
         if self.metric:
             metric_function = getattr(self, self.metric)
@@ -182,3 +221,23 @@ class MyLogReg():
                 i += 1
 
         return sum_total / (P * N)
+    
+    # Линеаризация
+    @staticmethod
+    def l1(weights: np.ndarray, coef: list):
+        regul = coef[0] * np.sum(np.abs(weights))
+        grad = coef[0] * np.sign(weights)
+        return (regul, grad)
+    
+    @staticmethod
+    def l2(weights: np.ndarray, coef: list):
+        regul = coef[1] * np.sum(weights**2)
+        grad = 2 * coef[1] * weights
+        return (regul, grad)
+    
+    @staticmethod
+    def elasticnet(weights: np.ndarray, coef: list):
+        regul = coef[0] * np.sum(np.abs(weights)) + coef[1] * np.sum(weights**2)
+        grad = coef[0] * np.sign(weights) + 2 * coef[1] * weights
+        return (regul, grad)
+    

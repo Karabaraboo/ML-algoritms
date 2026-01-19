@@ -63,7 +63,7 @@ class MyLogReg():
             logLoss = -1 / n * np.sum(y * np.log(y_pred + eps) + (1 - y) * np.log(y_pred + eps)) + regul
 
             # Градиент loss-функции
-            grad = 1 / n * np.matmul((y_pred_batch - y_batch).T, X_batch).T + grad_regul     # (N_feat+1, 1)
+            grad = 1 / batch_size * np.matmul((y_pred_batch - y_batch).T, X_batch).T + grad_regul     # (N_feat+1, 1)
 
             # Обновление весов
             # Определение скорости обучения, если она задана динамически

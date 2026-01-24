@@ -1,23 +1,28 @@
 import pandas as pd
 import numpy as np
+import random
 
 class MySVM():
     def __init__(self,
                  n_iter: int=10,                # число итераций
                  learning_rate: float=0.001,    # скорость обучения
-                 C = 1):
+                 C = 1,                         # Коэффициент учёта мягкого зазора
+                 sgd_sample=None,               # Количество образцов в батче при СГС. Если дробное - значит доля от общего числа
+                 random_state=42):
         self.n_iter = n_iter
         self.learning_rate = learning_rate
         self.weights=None                       # веса модели
         self.b = None                           # отступ гиперплоскости
-        self.C = C
+        self.C = C                              # Коэффициент перед слагаемым в loss, отвечающим за классификацию
+        self.sgd_sample = sgd_sample
+        self.random_state = random_state
 
     def __str__(self):
-        return f"MySVM class: n_iter={self.n_iter}, learning_rate={self.learning_rate}, C={self.C}"
+        return f"MySVM class: n_iter={self.n_iter}, learning_rate={self.learning_rate}, C={self.C}, sgd_sample={self.sgd_sample}"
     
     def fit(self, X: pd.DataFrame, y: pd.Series, verbose=False):
-        # X - матрица фичей
-        # y - целевая переменная. По-умолчанию, передаётся в виде 0 и 1
+        # X - матрица фичей                                                     # (N, N_feat)
+        # y - целевая переменная. По-умолчанию, передаётся в виде 0 и 1         # (N,)
         # verbose - метка вывода логов на печать
 
         y.loc[y == 0] = -1
@@ -28,8 +33,21 @@ class MySVM():
 
         n = X.shape[0]
 
+        # Стохастический градиентный спуск. Подготовка данных о батче
+        random.seed(self.random_state)
+        if self.sgd_sample:
+            batch_size = int(self.sgd_sample) if self.sgd_sample > 1 else int(self.sgd_sample * X.shape[0])
+        else:
+            batch_size = n
+
         for i in range(1, self.n_iter + 1):
-            for row in range(X.shape[0]):
+
+            if self.sgd_sample:
+                sample_rows_idx = random.sample(range(n), batch_size)
+            else:
+                sample_rows_idx = range(n)
+
+            for row in sample_rows_idx:
                 X_i = X.iloc[row]                                               # pd.Series, (N_feat,)
                 y_i = y.iloc[row]                                               # np.int
 
@@ -44,13 +62,8 @@ class MySVM():
                 self.weights -= self.learning_rate * grad_loss_w
                 self.b -= self.learning_rate * grad_loss_b
 
-                # loss = ||w||**2 + 1 / N * sum_i{max(0, 1 - y_i * (x_i * w + b))}
-                loss = self.weights.dot(self.weights) + 1 / n * max(0, 1 - y_i * (X_i.dot(self.weights) + self.b))
-
-                # # Расчёт y_i * (X_i * w + b)
-                # hingeLoss_condition = y.mul(X.dot(self.weights) + self.b)       # pd.Series, (N,)
-
-                # grad_Loss = 2 * self.weights                                    # pd.Series, (N,)
+            # loss = ||w||**2 + 1 / N * sum_i{max(0, 1 - y_i * (x_i * w + b))}
+            loss = self.weights.dot(self.weights) + 1 / n * np.sum(np.maximum(0, 1 - y.mul(X.dot(self.weights) + self.b)))
             
             if verbose:
                 if i == 1:

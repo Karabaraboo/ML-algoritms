@@ -20,15 +20,8 @@ class MyKNNClf():
 
     def predict(self, X: pd.DataFrame):
         # X - матрица фичей для предсказаний                    # (N_pred, N_feat)
-        distance_func = getattr(self, self.metric)
-        distances = X.apply(distance_func, axis=1)       # (N_pred, N)
-        print('distances in predict', distances, sep='\n')
-        # Индексы k ближайших соседей
-        indexes = distances.apply(lambda row: np.argsort(row)[0:self.k], axis=1)
-        print('indices in predict:', indexes, sep='\n')
-        y_predict = indexes.apply(lambda row: 0 if self.y_train.iloc[row].mean() < 0.5 else 1, axis=1)
-        #return distances.apply(lambda row: self.classification(row, self.k, self.y_train), axis=1)
-        return y_predict
+        y_predict_proba = self.predict_proba(X)
+        return (y_predict_proba >= 0.5) * 1
 
     def predict_proba(self, X: pd.DataFrame):
         # X - матрица фичей для предсказаний                    # (N_pred, N_feat)

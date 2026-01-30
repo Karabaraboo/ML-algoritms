@@ -2,10 +2,14 @@ import numpy as np
 import pandas as pd
 
 class MyKNNClf():
-    def __init__(self, k=3, metric='euclidean'):
+    def __init__(self, 
+                 k=3,                   # Число ближайших соседей 
+                 metric='euclidean',    # Метрика расчёта расстояния. ['euclidean', 'chebyshev', 'manhattan', 'cosine']
+                 weight='uniform'):     # Взвешенный kNN. ['uniform', 'rank', 'distance']
         self.k = k          # Количество ближайших соседей
         self.train_size = (0, 0)
-        self.metric = metric    # 'euclidean', 'chebyshev', 'manhattan', 'cosine'
+        self.metric = metric
+        self.weight = weight
     
     def __str__(self):
         return f"MyKNNClf class: k={self.k}"  # Можно использовать атрибут __dict__ экземпляра
@@ -21,17 +25,33 @@ class MyKNNClf():
     def predict(self, X: pd.DataFrame):
         # X - матрица фичей для предсказаний                    # (N_pred, N_feat)
         y_predict_proba = self.predict_proba(X)
+
         return (y_predict_proba >= 0.5) * 1
 
     def predict_proba(self, X: pd.DataFrame):
         # X - матрица фичей для предсказаний                    # (N_pred, N_feat)
         distance_func = getattr(self, self.metric)
-        distances = X.apply(distance_func, axis=1)              # (N_pred, N)
+        distances = X.apply(distance_func, axis=1).to_numpy()              # (N_pred, N)
         # Индексы k ближайших соседей
-        indexes = distances.apply(lambda row: np.argsort(row)[0:self.k], axis=1)
-        print('indices in predict_proba:', indexes, sep='\n')
-        y_predict_proba = indexes.apply(lambda row: self.y_train.iloc[row].sum() / row.shape[0], axis=1)
-        return y_predict_proba
+        neighbours_indices = np.argsort(distances)[:, :self.k]
+        neighbours_classes = self.y_train.to_numpy()[neighbours_indices]
+        # Создание массива с номерами строк для корректного использования broadcasting при обращении по индексам столбцов далее
+        rows = np.arange(distances.shape[0])[:, np.newaxis]
+        neighbours_distances = distances[rows, neighbours_indices] # Тут rows дополняется столбцами до количества столбов indices
+        #print('indices in predict_proba:', neighbours_indices, sep='\n')
+        if self.weight == 'uniform':
+            y_predict_proba = np.sum(neighbours_classes, axis=1) / self.k
+
+        elif self.weight == 'rank': 
+            y_predict_proba = np.sum(neighbours_classes / np.arange(1, self.k + 1), axis=1) / np.sum(1 / np.arange(1, self.k + 1))
+
+        elif self.weight == 'distance':
+            # Массив номеров строк, т.к. neighbours_distances двумерный
+            y_predict_proba = np.sum(neighbours_classes / neighbours_distances, axis=1) / np.sum(1 / neighbours_distances, axis=1)
+
+        else:
+            raise ValueError(f"Invalid weight: {self.weight}")
+        return pd.Series(y_predict_proba)
 
     def euclidean(self, x2: pd.Series):
         #print('Пришло: x2', x2)

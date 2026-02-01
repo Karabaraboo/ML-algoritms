@@ -41,7 +41,6 @@ class MyKNNClf():
         # Создание массива с номерами строк для корректного использования broadcasting при обращении по индексам столбцов далее
         rows = np.arange(distances.shape[0])[:, np.newaxis]
         neighbours_distances = distances[rows, neighbours_indices] # Тут rows дополняется столбцами до количества столбов indices
-        #print('indices in predict_proba:', neighbours_indices, sep='\n')
         if self.weight == 'uniform':
             y_predict_proba = np.sum(neighbours_classes, axis=1) / self.k
 
@@ -49,7 +48,6 @@ class MyKNNClf():
             y_predict_proba = np.sum(neighbours_classes / np.arange(1, self.k + 1), axis=1) / np.sum(1 / np.arange(1, self.k + 1))
 
         elif self.weight == 'distance':
-            # Массив номеров строк, т.к. neighbours_distances двумерный
             y_predict_proba = np.sum(neighbours_classes / neighbours_distances, axis=1) / np.sum(1 / neighbours_distances, axis=1)
 
         else:
@@ -57,7 +55,6 @@ class MyKNNClf():
         return pd.Series(y_predict_proba)
 
     def euclidean(self, x2: pd.Series):
-        #print('Пришло: x2', x2)
         return np.sqrt(((self.X_train - x2)**2).sum(axis=1))
     
     def chebyshev(self, x2: pd.Series):

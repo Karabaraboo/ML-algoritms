@@ -12,7 +12,10 @@ class MyKNNClf():
         self.weight = weight
     
     def __str__(self):
-        return f"MyKNNClf class: k={self.k}"  # Можно использовать атрибут __dict__ экземпляра
+        description = []
+        for param_name, param_value in self.__dict__.items():
+            description.append(f"{param_name}={param_value}")
+        return f"MyKNNClf class: {', '.join(description)}"  # Можно использовать атрибут __dict__ экземпляра
     
     def fit(self, X: pd.DataFrame, y: pd.Series):
         # X - матрица фичей                                     # (N, N_feat)

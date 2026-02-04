@@ -25,16 +25,38 @@ class MyKNNReg():
         self.train_size = X.shape
 
     def predict(self, X: pd.DataFrame) -> pd.Series:
-        x1 = X.to_numpy()
-        x2 = self.x_train
+        x1 = X.to_numpy()                                       # (n1, m)
+        x2 = self.x_train                                       # (n2, m)
 
-        # distances = np.sqrt(((x1[:, np.newaxis, :] - x2)**2).sum(axis=2))
-        distances = getattr(self, self.metric)(x1, x2)
-        print(distances)
-        neighbour_idx = np.argsort(distances)[:, :self.k]
+        distances = getattr(self, self.metric)(x1, x2)          # (n1, n2)
+        # print(distances)
+        neighbour_idx = np.argsort(distances)[:, :self.k]       # (n1, k)
         # print(neighbour_idx)
         # print(self.y_train[neighbour_idx])
-        return pd.Series(self.y_train[neighbour_idx].mean(axis=1))
+        neighbour_predict = self.y_train[neighbour_idx]        # (n1, k)
+        '''Тут работает механизм Fancy indexing в numpy. result[i, j] = y_train[idx[i, j]]'''
+
+        if self.weight == 'uniform':
+            return pd.Series(neighbour_predict.mean(axis=1))
+        
+        elif self.weight == 'rank':
+            weights = 1 / np.arange(1, self.k + 1) / (1 / np.arange(1, self.k + 1)).sum()   # (k,)
+            return pd.Series((neighbour_predict * weights).sum(axis=1))
+        
+        elif self.weight == 'distance':
+            '''Необходимо добавить дополнительную ось для строк, чтобы broadcasting
+            растянул массив строк и массив столбцов между собой, создав матрицу индексов
+            размерностью (n1, k).
+            Далее механизм fancy indexing обращается по каждому индексу из массива idx
+            к массиву distances и создаёт результат размерности (n1, k)'''
+            rows_num = np.arange(distances.shape[0])[:, np.newaxis]                 # (n1, 1)
+            cols_num = neighbour_idx                                                # (n1, k)
+            reverse_dist = 1 /distances[rows_num, cols_num]                         # (n1, k)
+            weights = reverse_dist / np.sum(reverse_dist, axis=1)[:, np.newaxis]    # (n1, k)
+            return pd.Series((neighbour_predict * weights).sum(axis=1))
+
+        else:
+            raise ValueError(f"Invalid weight: {self.weight}") 
 
     @staticmethod
     def euclidean(x1: np.ndarray, x2: np.ndarray) -> np.ndarray:

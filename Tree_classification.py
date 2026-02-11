@@ -32,17 +32,26 @@ class MyTreeClf():
         self.col_name = ''
         self.split_value = 0
 
+        # Исходная энтропия
+        # p0, p1 = X[column].groupby(y).count() / X.shape[0]
+        p1 = y.sum() / y.shape[0]
+        p0 = 1 - p1
+        S0 = -p0 * np.log2(p0) - p1 * np.log2(p1)
+        print(f"S0 = {S0}")
         for column in X:
             sorted_values = np.sort(X[column].unique())
             separators = (sorted_values[:-1] + sorted_values[1:]) / 2
 
-            # Исходная энтропия
-            p0, p1 = X[column].groupby(y).count() / X.shape[0]
-            S0 = -p0 * np.log2(p0) - p1 * np.log2(p1) 
             for sep in separators:
-                # Порядок False - 0, False - 1, True - 0, True - 1
-                p11, p12, p21, p22 = X[column].groupby([X[column] > sep, y]).count() / X.shape[0]
-                
+                print(f"Слева {(X[column] <= sep).sum()} элементов, из них {X[column].loc[(X[column] <= sep) & (y == 0)].count()} нулевого класса")
+                left = (X[column] <= sep).sum()     # элементов слева
+                right = (X[column] > sep).sum()     # элементов справа
+
+                p11 = X[column].loc[(X[column] <= sep) & (y == 0)].count() / left
+                p12 = 1 - p11
+                p21 = X[column].loc[(X[column] > sep) & (y == 0)].count() / right
+                p22 = 1 - p21
+
                 if p11 * p12 == 0:
                     S1 = 0
                 else:
@@ -52,14 +61,18 @@ class MyTreeClf():
                 else:
                     S2 = -p21 * np.log2(p21) - p22 * np.log2(p22)
                 
+                print(f"S1 = {S1}, S2 = {S2}")
                 # Прирост информации
-                ig_current = S0 - S1 - S2
+                ig_current = S0 - left / y.shape[0] * S1 - right / y.shape[0] * S2
 
+                print(f"current column is {column}, current sep = {sep}, current ig = {ig_current}")
                 if ig_current >= self.ig:
                     self.ig = ig_current
                     self.col_name = column
                     self.split_value = sep
+                
+                print(f"best column is {self.col_name}, best ig = {self.ig}")
         
-        
+        return self.col_name, self.split_value, self.ig
 
 

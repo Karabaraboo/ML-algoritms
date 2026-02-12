@@ -3,12 +3,14 @@ import pandas as pd
 
 class MyTreeClf():
     def __init__(self,
-                 max_depth=5,               # максимальная глубина дерева
-                 min_samples_split=2,       # мин допустимое кол-во объектов в листе для разбиения
-                 max_leafs=20):             # макс разрешённое кол-во листов в дереве
-        self.max_depth = max_depth
-        self.min_samples_split = min_samples_split
-        self.max_leafs = max_leafs
+                 max_depth=5,               
+                 min_samples_split=2,
+                 max_leafs=20):
+        self.max_depth = max_depth          # максимальная глубина дерева
+        self.min_samples_split = min_samples_split   # мин допустимое кол-во объектов в листе для разбиения
+        self.max_leafs = max_leafs          # макс разрешённое кол-во листов в дереве
+        self.leafs_cnt = 0                  # Текущее количество листьев в дереве
+
     
     def __str__(self):
         description = []
@@ -64,12 +66,36 @@ class MyTreeClf():
                 
                 print(f"best column is {self.col_name}, best ig = {self.ig}")
         
-        return self.col_name, self.split_value, self.ig
+        return (self.col_name, self.split_value, self.ig)
     
+    def fit(self, X: pd.DataFrame, y: pd.Series):
+        
+
+
     @staticmethod
     def enthropy(y):
         p1 = y.sum() / y.shape[0]
         p0 = 1 - p1
         return 0 if p0 * p1 == 0 else -p0 * np.log2(p0) - p1 * np.log2(p1)
+    
+    def tree(self, X: pd.DataFrame, y: pd.Series, depth, n_sample):
+        best_split = self.get_best_split(X, y)
+            
+        X_left = X.loc[X[best_split[0]] <= best_split[1]]
+        y_left = y.loc[X[best_split[0]] <= best_split[1]]
+        
+        if (X_left.shape[0] < 2 or                                      # Если выборка содержит 1 элемент
+            y_left.sum() == y_left.shape[0] or y_left.sum() == 0 or     # или в ней один класс
+            depth > self.max_depth,                                     # превышена допустимая глубина дерева
+            n_sample < self.min_samples_split):                         # в объёме выборки слишком мало элементов
+
+            break
+        
+        else:
+
+
+
+        X_right = X.loc[X[best_split[0]] > best_split[1]]
+        y_right = y.loc[X[best_split[0]] > best_split[1]]
 
 

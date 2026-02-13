@@ -1,6 +1,16 @@
 import numpy as np
 import pandas as pd
 
+class Node():
+    def __init__(self, feature=None, threshold=None, left=None, right=None, value=None):
+        self.feature = feature     # Параметр, по которому выполняется разбиение
+        self.threshold = threshold   # Порог разбиения
+        self.left = None        # Левое поддерево
+        self.right = None       # Правое поддерево
+
+        self.value = value      # вероятность первого класса, если лист
+
+
 class MyTreeClf():
     def __init__(self,
                  max_depth=5,               
@@ -69,8 +79,36 @@ class MyTreeClf():
         return (self.col_name, self.split_value, self.ig)
     
     def fit(self, X: pd.DataFrame, y: pd.Series):
-        
+        X = X.to_numpy()
+        y = y.to_numpy()
+        self.tree(X, y, 1)
 
+    def tree(self, X: np.ndarray, y: np.ndarray, depth: int):
+        # Если это лист
+        if (X.shape[0] < 2 or                        # Если выборка содержит 1 элемент
+            y.sum() == y.shape[0] or y.sum() == 0 or        # или в ней один класс
+            depth >= self.max_depth or                      # превышена допустимая глубина дерева
+            y.shape[0] < self.min_samples_split or          # число элементов меньше минимально допустимого
+            self.leafs_cnt > self.max_leafs or              # текущее число листьев превышает заданное максимальное
+            (2**depth > self.max_leafs and depth > 1)):     # потенциальное число листьев превышает максимальное (кроме корня дерева)
+            # тогда возращаем вероятность первого класса
+            self.leafs_cnt += 1
+            return Node(value = y.sum() / y.shape[0])
+        
+        # Если это узел, то разбиваем        
+        best_split = self.get_best_split(X, y)
+        left_idx = X[best_split[0]] <= best_split[1]
+        right_idx = X[best_split[0]] > best_split[1]
+
+        # и вызываем построение 
+        left_tree = self.tree(X[left_idx], y[left_idx], depth + 1)
+        right_tree = self.tree(X[right_idx], y[right_idx], depth + 1)
+        
+        # Запись в Node
+        return Node(feature=best_split[0],
+                    threshold=best_split[1],
+                    left=left_tree,
+                    right=right_tree)
 
     @staticmethod
     def enthropy(y):
@@ -78,24 +116,3 @@ class MyTreeClf():
         p0 = 1 - p1
         return 0 if p0 * p1 == 0 else -p0 * np.log2(p0) - p1 * np.log2(p1)
     
-    def tree(self, X: pd.DataFrame, y: pd.Series, depth, n_sample):
-        best_split = self.get_best_split(X, y)
-            
-        X_left = X.loc[X[best_split[0]] <= best_split[1]]
-        y_left = y.loc[X[best_split[0]] <= best_split[1]]
-        
-        if (X_left.shape[0] < 2 or                                      # Если выборка содержит 1 элемент
-            y_left.sum() == y_left.shape[0] or y_left.sum() == 0 or     # или в ней один класс
-            depth > self.max_depth,                                     # превышена допустимая глубина дерева
-            n_sample < self.min_samples_split):                         # в объёме выборки слишком мало элементов
-
-            break
-        
-        else:
-
-
-
-        X_right = X.loc[X[best_split[0]] > best_split[1]]
-        y_right = y.loc[X[best_split[0]] > best_split[1]]
-
-

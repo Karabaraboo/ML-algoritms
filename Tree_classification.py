@@ -5,8 +5,8 @@ class Node():
     def __init__(self, feature=None, threshold=None, left=None, right=None, value=None):
         self.feature = feature     # Параметр, по которому выполняется разбиение
         self.threshold = threshold   # Порог разбиения
-        self.left = None        # Левое поддерево
-        self.right = None       # Правое поддерево
+        self.left = left        # Левое поддерево
+        self.right = right       # Правое поддерево
 
         self.value = value      # вероятность первого класса, если лист
 
@@ -50,13 +50,13 @@ class MyTreeClf():
         # Исходная энтропия
         S0 = self.enthropy(y)
 
-        print(f"S0 = {S0}")
+        #print(f"S0 = {S0}")
         for column in X:
             sorted_values = np.sort(X[column].unique())
             separators = (sorted_values[:-1] + sorted_values[1:]) / 2
 
             for sep in separators:
-                print(f"Слева {(X[column] <= sep).sum()} элементов, из них {X[column].loc[(X[column] <= sep) & (y == 0)].count()} нулевого класса")
+                #print(f"Слева {(X[column] <= sep).sum()} элементов, из них {X[column].loc[(X[column] <= sep) & (y == 0)].count()} нулевого класса")
                 left_idx = X[column] <= sep     # bool-индексы элементов слева
                 right_idx = X[column] > sep     # bool-индексы элементов справа
                 left_num = left_idx.sum()       # количество элементов слева
@@ -64,51 +64,79 @@ class MyTreeClf():
                 S_left = self.enthropy(y[left_idx])
                 S_right = self.enthropy(y[right_idx])
                 
-                print(f"S1 = {S_left}, S2 = {S_right}")
+                #print(f"S1 = {S_left}, S2 = {S_right}")
                 # Прирост информации
                 ig_current = S0 - left_num / (left_num + right_num) * S_left - right_num / (left_num + right_num) * S_right
 
-                print(f"current column is {column}, current sep = {sep}, current ig = {ig_current}")
+                #print(f"current column is {column}, current sep = {sep}, current ig = {ig_current}")
                 if ig_current > self.ig:
                     self.ig = ig_current
                     self.col_name = column
                     self.split_value = sep
                 
-                print(f"best column is {self.col_name}, best ig = {self.ig}")
+                #print(f"best column is {self.col_name}, best ig = {self.ig}")
         
         return (self.col_name, self.split_value, self.ig)
     
     def fit(self, X: pd.DataFrame, y: pd.Series):
+        # Сохраняю названия фичей, т.к. в build_tree используется numpy
+        self.column_names = X.columns
         X = X.to_numpy()
         y = y.to_numpy()
-        self.tree(X, y, 1)
+        self.tree = self.build_tree(X, y, 1)
 
-    def tree(self, X: np.ndarray, y: np.ndarray, depth: int):
+        # Удаляю переменную из экземпляра класса
+        del self.column_names
+
+    def build_tree(self, X: np.ndarray, y: np.ndarray, depth: int):
         # Если это лист
-        if (X.shape[0] < 2 or                        # Если выборка содержит 1 элемент
+        if (X.shape[0] < 2 or                               # Если выборка содержит 1 элемент
             y.sum() == y.shape[0] or y.sum() == 0 or        # или в ней один класс
-            depth >= self.max_depth or                      # превышена допустимая глубина дерева
+            depth > self.max_depth or                       # превышена допустимая глубина дерева
             y.shape[0] < self.min_samples_split or          # число элементов меньше минимально допустимого
             self.leafs_cnt > self.max_leafs or              # текущее число листьев превышает заданное максимальное
             (2**depth > self.max_leafs and depth > 1)):     # потенциальное число листьев превышает максимальное (кроме корня дерева)
-            # тогда возращаем вероятность первого класса
+            
+            print('we are here')
+
+            # тогда это лист
             self.leafs_cnt += 1
+            # тогда возращаем вероятность первого класса
             return Node(value = y.sum() / y.shape[0])
         
         # Если это узел, то разбиваем        
-        best_split = self.get_best_split(X, y)
-        left_idx = X[best_split[0]] <= best_split[1]
-        right_idx = X[best_split[0]] > best_split[1]
+        best_split = self.get_best_split(pd.DataFrame(X), pd.Series(y))
+        print(f"best_split: {best_split}")
+        left_idx = X[:, best_split[0]] <= best_split[1]
+        right_idx = X[:, best_split[0]] > best_split[1]
 
         # и вызываем построение 
-        left_tree = self.tree(X[left_idx], y[left_idx], depth + 1)
-        right_tree = self.tree(X[right_idx], y[right_idx], depth + 1)
+        left_tree = self.build_tree(X[left_idx], y[left_idx], depth + 1)
+        right_tree = self.build_tree(X[right_idx], y[right_idx], depth + 1)
         
         # Запись в Node
-        return Node(feature=best_split[0],
+        return Node(feature=self.column_names[best_split[0]],
                     threshold=best_split[1],
                     left=left_tree,
                     right=right_tree)
+    
+    def print_tree(self):
+        return self.printing_node(self.tree)
+
+    def printing_node(self, node: Node, side: str=None, depth: int=0):
+        if node.value is not None:
+            print(f"{'\t' * depth} leaf_{side} = {node.value}")
+            return (1, node.value)
+        else:
+            print(f"{'\t' * depth} {node.feature} > {node.threshold}:")
+            left = self.printing_node(node.left, side='left', depth=depth + 1)
+            right = self.printing_node(node.right, side='right', depth=depth + 1)
+            n_leafs = left[0] + right[0]
+            sum_leafs = left[1] + right[1]
+            return (n_leafs, sum_leafs)
+
+                
+
 
     @staticmethod
     def enthropy(y):

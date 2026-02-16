@@ -3,23 +3,25 @@ import pandas as pd
 
 class Node():
     def __init__(self, feature=None, threshold=None, left=None, right=None, value=None):
-        self.feature = feature     # Параметр, по которому выполняется разбиение
-        self.threshold = threshold   # Порог разбиения
-        self.left = left        # Левое поддерево
-        self.right = right       # Правое поддерево
+        self.feature = feature          # Параметр, по которому выполняется разбиение
+        self.threshold = threshold      # Порог разбиения
+        self.left = left                # Левое поддерево
+        self.right = right              # Правое поддерево
 
-        self.value = value      # вероятность первого класса, если лист
+        self.value = value              # вероятность первого класса, если лист
 
 
 class MyTreeClf():
     def __init__(self,
                  max_depth=5,               
                  min_samples_split=2,
-                 max_leafs=20):
+                 max_leafs=20,
+                 verbose=False):
         self.max_depth = max_depth          # максимальная глубина дерева
         self.min_samples_split = min_samples_split   # мин допустимое кол-во объектов в листе для разбиения
         self.max_leafs = max_leafs          # макс разрешённое кол-во листов в дереве
         self.leafs_cnt = 0                  # Текущее количество листьев в дереве
+        self.verbose = verbose              # Выпод на печать промежуточных результатов
 
     
     def __str__(self):
@@ -83,34 +85,50 @@ class MyTreeClf():
         self.column_names = X.columns
         X = X.to_numpy()
         y = y.to_numpy()
+        # Переменная с потенциальным числом листов в дереве (увеличивается на 1 при создании узла и уменьшается, если лист)
+        self.leaf_potential = 1
+
         self.tree = self.build_tree(X, y, 1)
 
         # Удаляю переменную из экземпляра класса
         del self.column_names
+        del self.leaf_potential
 
     def build_tree(self, X: np.ndarray, y: np.ndarray, depth: int):
+        if self.verbose:
+            print(f"\n depth = {depth}")
+            print(f'X.shape[0] < 2: {X.shape[0] < 2}')
+            print(f"y.sum() == y.shape[0]: {y.sum() == y.shape[0]}, y.sum() == 0: {y.sum() == 0}")
+            print(f"depth > self.max_depth: {depth > self.max_depth}")
+            print(f"y.shape[0] < self.min_samples_split: {y.shape[0] < self.min_samples_split}")
+            print(f"self.leafs_cnt > self.max_leafs: {self.leafs_cnt > self.max_leafs}")
+            print(f"self.leafs_cnt + potential >= self.max_leafs: {self.leafs_cnt + self.leaf_potential >= self.max_leafs}")
+
         # Если это лист
         if (X.shape[0] < 2 or                               # Если выборка содержит 1 элемент
             y.sum() == y.shape[0] or y.sum() == 0 or        # или в ней один класс
             depth > self.max_depth or                       # превышена допустимая глубина дерева
             y.shape[0] < self.min_samples_split or          # число элементов меньше минимально допустимого
-            self.leafs_cnt > self.max_leafs or              # текущее число листьев превышает заданное максимальное
-            (2**depth > self.max_leafs and depth > 1)):     # потенциальное число листьев превышает максимальное (кроме корня дерева)
-            
-            print('we are here')
+            self.leafs_cnt + self.leaf_potential >= self.max_leafs and depth > 1):
+            # Последнее условие - число созданных листьев и потенциальных (по одному на каждый уровень выше)
 
             # тогда это лист
             self.leafs_cnt += 1
+            self.leaf_potential -= 1
             # тогда возращаем вероятность первого класса
             return Node(value = y.sum() / y.shape[0])
         
         # Если это узел, то разбиваем        
         best_split = self.get_best_split(pd.DataFrame(X), pd.Series(y))
-        print(f"best_split: {best_split}")
         left_idx = X[:, best_split[0]] <= best_split[1]
         right_idx = X[:, best_split[0]] > best_split[1]
-
-        # и вызываем построение 
+        
+        if self.verbose:
+            print(f"best_split: {best_split}")
+            
+        # создание ветвления добавляет один потенциальный лист
+        self.leaf_potential += 1
+        # и вызываем построение
         left_tree = self.build_tree(X[left_idx], y[left_idx], depth + 1)
         right_tree = self.build_tree(X[right_idx], y[right_idx], depth + 1)
         
@@ -125,18 +143,19 @@ class MyTreeClf():
 
     def printing_node(self, node: Node, side: str=None, depth: int=0):
         if node.value is not None:
-            print(f"{'\t' * depth} leaf_{side} = {node.value}")
+            if self.verbose:
+                print(f"{'\t' * depth} leaf_{side} = {node.value}")
+
             return (1, node.value)
         else:
-            print(f"{'\t' * depth} {node.feature} > {node.threshold}:")
+            if self.verbose:
+                print(f"{'\t' * depth} {node.feature} > {node.threshold}:")
+
             left = self.printing_node(node.left, side='left', depth=depth + 1)
             right = self.printing_node(node.right, side='right', depth=depth + 1)
             n_leafs = left[0] + right[0]
             sum_leafs = left[1] + right[1]
             return (n_leafs, sum_leafs)
-
-                
-
 
     @staticmethod
     def enthropy(y):

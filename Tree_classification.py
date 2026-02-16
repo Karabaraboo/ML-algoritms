@@ -162,24 +162,26 @@ class MyTreeClf():
         return 1 * (self.predict_proba(X) > 0.5)
 
     def predict_proba(self, X: pd.DataFrame) -> pd.Series:
-        return self.traverse_tree(self.tree, X)
+        # Пустой массив для записи предсказаний
+        prediction = np.empty(X.shape[0], dtype=float)
+        indices = np.arange(X.shape[0])
+        self.traverse_tree(X, self.tree, prediction, indices)
+
+        return pd.Series(prediction)
         
-        
-    def traverse_tree(self, tree: Node, X: pd.DataFrame):
+    def traverse_tree(self, X: pd.DataFrame, tree: Node, prediction: np.ndarray, indices: np.ndarray) -> np.ndarray:
+        # prediction - это один и тот же объект в памяти на каждой итерации, т.к. передача по ссылке
         if tree.value is not None:
-            return pd.Series([tree.value] * X.shape[0])
+            prediction[indices] = tree.value
+        else:
+            # маска по условию
+            left_msk = X.iloc[indices][tree.feature] <= tree.threshold
 
-        feature = tree.feature
-        threshold = tree.threshold
-
-        left_idx = X[feature] <= threshold
-        right_idx = X[feature] > threshold
-
-        left = self.traverse_tree(tree.left, X[left_idx])
-        right = self.traverse_tree(tree.right, X[right_idx])
-
-        result = [part for part in [left, right] if not part.empty]
-        return pd.concat(result)
+            if np.any(left_msk):
+                # Просто передавать тот же X, а не выделять в нём строки - лучше, из-за передачи по ссылке
+                self.traverse_tree(X, tree.left, prediction, indices[left_msk])
+            if np.any(~left_msk):
+                self.traverse_tree(X, tree.right, prediction, indices[~left_msk])
 
 
 

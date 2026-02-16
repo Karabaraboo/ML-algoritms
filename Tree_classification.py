@@ -156,6 +156,32 @@ class MyTreeClf():
             n_leafs = left[0] + right[0]
             sum_leafs = left[1] + right[1]
             return (n_leafs, sum_leafs)
+        
+
+    def predict(self, X: pd.DataFrame) -> pd.Series:
+        return 1 * (self.predict_proba(X) > 0.5)
+
+    def predict_proba(self, X: pd.DataFrame) -> pd.Series:
+        return self.traverse_tree(self.tree, X)
+        
+        
+    def traverse_tree(self, tree: Node, X: pd.DataFrame):
+        if tree.value is not None:
+            return pd.Series([tree.value] * X.shape[0])
+
+        feature = tree.feature
+        threshold = tree.threshold
+
+        left_idx = X[feature] <= threshold
+        right_idx = X[feature] > threshold
+
+        left = self.traverse_tree(tree.left, X[left_idx])
+        right = self.traverse_tree(tree.right, X[right_idx])
+
+        result = [part for part in [left, right] if not part.empty]
+        return pd.concat(result)
+
+
 
     @staticmethod
     def enthropy(y):

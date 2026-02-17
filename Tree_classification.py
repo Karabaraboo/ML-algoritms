@@ -82,33 +82,32 @@ class MyTreeClf():
     
     def fit(self, X: pd.DataFrame, y: pd.Series):
         # Сохраняю названия фичей, т.к. в build_tree используется numpy
-        self.column_names = X.columns
+        column_names = X.columns.tolist()
         X = X.to_numpy()
         y = y.to_numpy()
         # Переменная с потенциальным числом листов в дереве (увеличивается на 1 при создании узла и уменьшается, если лист)
         self.leaf_potential = 1
 
-        self.tree = self.build_tree(X, y, 1)
+        self.tree = self.build_tree(X, y, np.arange(X.shape[0]), 1, column_names)
 
         # Удаляю переменную из экземпляра класса
-        del self.column_names
         del self.leaf_potential
 
-    def build_tree(self, X: np.ndarray, y: np.ndarray, depth: int):
+    def build_tree(self, X: np.ndarray, y: np.ndarray, indices: np.ndarray, depth: int, features: str):
         if self.verbose:
             print(f"\n depth = {depth}")
-            print(f'X.shape[0] < 2: {X.shape[0] < 2}')
-            print(f"y.sum() == y.shape[0]: {y.sum() == y.shape[0]}, y.sum() == 0: {y.sum() == 0}")
+            print(f'X.shape[0] < 2: {X[indices].shape[0] < 2}')
+            print(f"y.sum() == y.shape[0]: {y[indices].sum() == y[indices].shape[0]}, y.sum() == 0: {y[indices].sum() == 0}")
             print(f"depth > self.max_depth: {depth > self.max_depth}")
-            print(f"y.shape[0] < self.min_samples_split: {y.shape[0] < self.min_samples_split}")
+            print(f"y.shape[0] < self.min_samples_split: {y[indices].shape[0] < self.min_samples_split}")
             print(f"self.leafs_cnt > self.max_leafs: {self.leafs_cnt > self.max_leafs}")
             print(f"self.leafs_cnt + potential >= self.max_leafs: {self.leafs_cnt + self.leaf_potential >= self.max_leafs}")
 
         # Если это лист
-        if (X.shape[0] < 2 or                               # Если выборка содержит 1 элемент
-            y.sum() == y.shape[0] or y.sum() == 0 or        # или в ней один класс
+        if (X[indices].shape[0] < 2 or                               # Если выборка содержит 1 элемент
+            y[indices].sum() == y[indices].shape[0] or y[indices].sum() == 0 or        # или в ней один класс
             depth > self.max_depth or                       # превышена допустимая глубина дерева
-            y.shape[0] < self.min_samples_split or          # число элементов меньше минимально допустимого
+            y[indices].shape[0] < self.min_samples_split or          # число элементов меньше минимально допустимого
             self.leafs_cnt + self.leaf_potential >= self.max_leafs and depth > 1):
             # Последнее условие - число созданных листьев и потенциальных (по одному на каждый уровень выше)
 
@@ -116,12 +115,12 @@ class MyTreeClf():
             self.leafs_cnt += 1
             self.leaf_potential -= 1
             # тогда возращаем вероятность первого класса
-            return Node(value = y.sum() / y.shape[0])
+            return Node(value = y[indices].sum() / y[indices].shape[0])
         
         # Если это узел, то разбиваем        
-        best_split = self.get_best_split(pd.DataFrame(X), pd.Series(y))
-        left_idx = X[:, best_split[0]] <= best_split[1]
-        right_idx = X[:, best_split[0]] > best_split[1]
+        best_split = self.get_best_split(pd.DataFrame(X[indices]), pd.Series(y[indices]))
+        left_msk = X[indices, best_split[0]] <= best_split[1]
+        #right_msk = X[indices, best_split[0]] > best_split[1]
         
         if self.verbose:
             print(f"best_split: {best_split}")
@@ -129,11 +128,11 @@ class MyTreeClf():
         # создание ветвления добавляет один потенциальный лист
         self.leaf_potential += 1
         # и вызываем построение
-        left_tree = self.build_tree(X[left_idx], y[left_idx], depth + 1)
-        right_tree = self.build_tree(X[right_idx], y[right_idx], depth + 1)
+        left_tree = self.build_tree(X, y, indices[left_msk], depth + 1, features)
+        right_tree = self.build_tree(X, y, indices[~left_msk], depth + 1, features)
         
         # Запись в Node
-        return Node(feature=self.column_names[best_split[0]],
+        return Node(feature=features[best_split[0]],
                     threshold=best_split[1],
                     left=left_tree,
                     right=right_tree)
@@ -182,8 +181,6 @@ class MyTreeClf():
                 self.traverse_tree(X, tree.left, prediction, indices[left_msk])
             if np.any(~left_msk):
                 self.traverse_tree(X, tree.right, prediction, indices[~left_msk])
-
-
 
     @staticmethod
     def enthropy(y):

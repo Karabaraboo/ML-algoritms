@@ -85,8 +85,6 @@ class MyTreeClf():
         column_names = X.columns.tolist()
         X = X.to_numpy()
         y = y.to_numpy()
-        # Переменная с потенциальным числом листов в дереве (увеличивается на 1 при создании узла и уменьшается, если лист)
-        #self.leaf_potential = 1
 
         # Обнуление на случай повторного вызова fit
         self.leafs_cnt = 0 
@@ -96,9 +94,6 @@ class MyTreeClf():
                                     depth=1, 
                                     features=column_names,
                                     leaf_potential=1)
-
-        # Удаляю переменную из экземпляра класса
-        #del self.leaf_potential
 
     def build_tree(self, X: np.ndarray, y: np.ndarray, indices: np.ndarray, depth: int, features: str, leaf_potential: int):
         if self.verbose:
@@ -120,7 +115,6 @@ class MyTreeClf():
 
             # тогда это лист
             self.leafs_cnt += 1
-            # self.leaf_potential -= 1
 
             if self.verbose:
                 print(f"Число листьев = {self.leafs_cnt}, значение листа: {y[indices].sum() / y[indices].shape[0]}")
@@ -131,13 +125,14 @@ class MyTreeClf():
         # Если это узел, то разбиваем        
         best_split = self.get_best_split(pd.DataFrame(X[indices]), pd.Series(y[indices]))
         left_msk = X[indices, best_split[0]] <= best_split[1]
-        #right_msk = X[indices, best_split[0]] > best_split[1]
         
         if self.verbose:
             print(f"best_split: {best_split}")
             
-        # создание ветвления добавляет один потенциальный лист при заходе в левую ветку,
-        # но при заходе в правую - потенциальное количество листов прежнее
+        '''создание ветвления добавляет один потенциальный лист при заходе в левую ветку,
+        но при заходе в правую - потенциальное количество листов прежнее
+        Т.е. для левой ветки количество потенциальных листьев = depth, 
+        но для правой = depth - 1'''
         left_tree = self.build_tree(X, y, indices[left_msk], depth + 1, features, leaf_potential + 1)
         right_tree = self.build_tree(X, y, indices[~left_msk], depth + 1, features, leaf_potential)
         
@@ -146,7 +141,6 @@ class MyTreeClf():
                     threshold=best_split[1],
                     left=left_tree,
                     right=right_tree)
-  
     
     def print_tree(self):
         return self.printing_node(self.tree)

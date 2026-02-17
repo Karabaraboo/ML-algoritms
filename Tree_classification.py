@@ -86,14 +86,21 @@ class MyTreeClf():
         X = X.to_numpy()
         y = y.to_numpy()
         # Переменная с потенциальным числом листов в дереве (увеличивается на 1 при создании узла и уменьшается, если лист)
-        self.leaf_potential = 1
+        #self.leaf_potential = 1
 
-        self.tree = self.build_tree(X, y, np.arange(X.shape[0]), 1, column_names)
+        # Обнуление на случай повторного вызова fit
+        self.leafs_cnt = 0 
+        self.tree = self.build_tree(X=X,
+                                    y=y,
+                                    indices=np.arange(X.shape[0]),
+                                    depth=1, 
+                                    features=column_names,
+                                    leaf_potential=1)
 
         # Удаляю переменную из экземпляра класса
-        del self.leaf_potential
+        #del self.leaf_potential
 
-    def build_tree(self, X: np.ndarray, y: np.ndarray, indices: np.ndarray, depth: int, features: str):
+    def build_tree(self, X: np.ndarray, y: np.ndarray, indices: np.ndarray, depth: int, features: str, leaf_potential: int):
         if self.verbose:
             print(f"\n depth = {depth}")
             print(f'X.shape[0] < 2: {X[indices].shape[0] < 2}')
@@ -101,19 +108,23 @@ class MyTreeClf():
             print(f"depth > self.max_depth: {depth > self.max_depth}")
             print(f"y.shape[0] < self.min_samples_split: {y[indices].shape[0] < self.min_samples_split}")
             print(f"self.leafs_cnt > self.max_leafs: {self.leafs_cnt > self.max_leafs}")
-            print(f"self.leafs_cnt + potential >= self.max_leafs: {self.leafs_cnt + self.leaf_potential >= self.max_leafs}")
+            print(f"self.leafs_cnt + potential >= self.max_leafs: {self.leafs_cnt + leaf_potential >= self.max_leafs}")
 
         # Если это лист
         if (X[indices].shape[0] < 2 or                               # Если выборка содержит 1 элемент
             y[indices].sum() == y[indices].shape[0] or y[indices].sum() == 0 or        # или в ней один класс
             depth > self.max_depth or                       # превышена допустимая глубина дерева
             y[indices].shape[0] < self.min_samples_split or          # число элементов меньше минимально допустимого
-            self.leafs_cnt + self.leaf_potential >= self.max_leafs and depth > 1):
+            self.leafs_cnt + leaf_potential >= self.max_leafs and depth > 1):
             # Последнее условие - число созданных листьев и потенциальных (по одному на каждый уровень выше)
 
             # тогда это лист
             self.leafs_cnt += 1
-            self.leaf_potential -= 1
+            # self.leaf_potential -= 1
+
+            if self.verbose:
+                print(f"Число листьев = {self.leafs_cnt}, значение листа: {y[indices].sum() / y[indices].shape[0]}")
+
             # тогда возращаем вероятность первого класса
             return Node(value = y[indices].sum() / y[indices].shape[0])
         
@@ -125,17 +136,17 @@ class MyTreeClf():
         if self.verbose:
             print(f"best_split: {best_split}")
             
-        # создание ветвления добавляет один потенциальный лист
-        self.leaf_potential += 1
-        # и вызываем построение
-        left_tree = self.build_tree(X, y, indices[left_msk], depth + 1, features)
-        right_tree = self.build_tree(X, y, indices[~left_msk], depth + 1, features)
+        # создание ветвления добавляет один потенциальный лист при заходе в левую ветку,
+        # но при заходе в правую - потенциальное количество листов прежнее
+        left_tree = self.build_tree(X, y, indices[left_msk], depth + 1, features, leaf_potential + 1)
+        right_tree = self.build_tree(X, y, indices[~left_msk], depth + 1, features, leaf_potential)
         
         # Запись в Node
         return Node(feature=features[best_split[0]],
                     threshold=best_split[1],
                     left=left_tree,
                     right=right_tree)
+  
     
     def print_tree(self):
         return self.printing_node(self.tree)

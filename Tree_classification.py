@@ -133,15 +133,22 @@ class MyTreeClf():
             # тогда возращаем вероятность первого класса
             return Node(value = np.mean(y[indices]))
         
-        # Если это узел, то разбиваем        
+        # Проверка на лист по критерию попадания в один бин
+        if self.bins:
+            for col_number in range(X.shape[1]):
+                # Если хотя бы для одной фиче найдутся элементы, которые будут между границами бинов, то продолжаем
+                if np.any((self.thresholds[col_number] >= X[indices, col_number].min()) &
+                (self.thresholds[col_number] <= X[indices, col_number].max())):
+                    break
+            else:
+                # Если таких элементов нет (всё в одном бине), то это лист
+                return Node(value = np.mean(y[indices]))
+
+        # Если это узел, то разбиваем      
         best_split = self.get_best_split(pd.DataFrame(X[indices]), pd.Series(y[indices]))
         if self.verbose:
             print("\n*********Разделение узла")
             print(f"Массив X:\n{X}\nbest_split: {best_split}")
-
-        # На случай, если нет подходящего разбиения, назначает лист
-        if best_split[0] == '':
-            return Node(value = np.mean(y[indices]))
 
         left_msk = X[indices, best_split[0]] <= best_split[1]
         

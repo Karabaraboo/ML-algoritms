@@ -16,14 +16,15 @@ class MyTreeClf():
                  max_depth=5,               
                  min_samples_split=2,
                  max_leafs=20,
-                 verbose=False):
+                 verbose=False,
+                 bins=None):
         self.max_depth = max_depth          # максимальная глубина дерева
         self.min_samples_split = min_samples_split   # мин допустимое кол-во объектов в листе для разбиения
         self.max_leafs = max_leafs          # макс разрешённое кол-во листов в дереве
         self.leafs_cnt = 0                  # Текущее количество листьев в дереве
-        self.verbose = verbose              # Выпод на печать промежуточных результатов
+        self.verbose = verbose              # Вывод на печать промежуточных результатов
+        self.bins = bins                    # Количество бинов на гистограмме для фичи
 
-    
     def __str__(self):
         description = []
         for name, value in self.__dict__.items():
@@ -54,8 +55,11 @@ class MyTreeClf():
 
         #print(f"S0 = {S0}")
         for column in X:
-            sorted_values = np.sort(X[column].unique())
-            separators = (sorted_values[:-1] + sorted_values[1:]) / 2
+            if self.bins:
+                separators = self.thresholds[column]
+            else:    
+                sorted_values = np.sort(X[column].unique())
+                separators = (sorted_values[:-1] + sorted_values[1:]) / 2
 
             for sep in separators:
                 #print(f"Слева {(X[column] <= sep).sum()} элементов, из них {X[column].loc[(X[column] <= sep) & (y == 0)].count()} нулевого класса")
@@ -86,55 +90,68 @@ class MyTreeClf():
         X = X.to_numpy()
         y = y.to_numpy()
 
+        # Если bins задано, то определяем границы бинов гистограммы
+        if self.bins:
+            self.thresholds = [None]*X.shape[1]     # Пустой список длиной, равной количеству фичей
+            self.get_separators(X, y)
+
         # Обнуление на случай повторного вызова fit
         self.leafs_cnt = 0 
         self.tree = self.build_tree(X=X,
                                     y=y,
                                     indices=np.arange(X.shape[0]),
                                     depth=1, 
-                                    features=column_names,
-                                    leaf_potential=1)
+                                    features=column_names)
 
-    def build_tree(self, X: np.ndarray, y: np.ndarray, indices: np.ndarray, depth: int, features: str, leaf_potential: int):
+    def build_tree(self, X: np.ndarray, y: np.ndarray, indices: np.ndarray, depth: int, features: str):
         if self.verbose:
-            print(f"\n depth = {depth}")
+            print(f"indices = {indices}")
+            print('********* \n условия в build_tree')
+            print(f"\ndepth = {depth}")
             print(f'X.shape[0] < 2: {X[indices].shape[0] < 2}')
             print(f"y.sum() == y.shape[0]: {y[indices].sum() == y[indices].shape[0]}, y.sum() == 0: {y[indices].sum() == 0}")
             print(f"depth > self.max_depth: {depth > self.max_depth}")
             print(f"y.shape[0] < self.min_samples_split: {y[indices].shape[0] < self.min_samples_split}")
             print(f"self.leafs_cnt > self.max_leafs: {self.leafs_cnt > self.max_leafs}")
-            print(f"self.leafs_cnt + potential >= self.max_leafs: {self.leafs_cnt + leaf_potential >= self.max_leafs}")
+            print(f"self.leafs_cnt + 1 >= self.max_leafs: {self.leafs_cnt + 1 >= self.max_leafs}")
 
         # Если это лист
-        if (X[indices].shape[0] < 2 or                               # Если выборка содержит 1 элемент
-            y[indices].sum() == y[indices].shape[0] or y[indices].sum() == 0 or        # или в ней один класс
-            depth > self.max_depth or                       # превышена допустимая глубина дерева
-            y[indices].shape[0] < self.min_samples_split or          # число элементов меньше минимально допустимого
-            self.leafs_cnt + leaf_potential >= self.max_leafs and depth > 1):
+        if (X[indices].shape[0] < 2 or                                              # Если выборка содержит 1 элемент
+            y[indices].sum() == y[indices].shape[0] or y[indices].sum() == 0 or     # или в ней один класс
+            depth > self.max_depth or                                               # превышена допустимая глубина дерева
+            y[indices].shape[0] < self.min_samples_split or                         # число элементов меньше минимально допустимого
+            self.leafs_cnt + 1 >= self.max_leafs and depth > 1):                    # число листов больше допустимого
             # Последнее условие - число созданных листьев и потенциальных (по одному на каждый уровень выше)
 
             # тогда это лист
             self.leafs_cnt += 1
 
             if self.verbose:
-                print(f"Число листьев = {self.leafs_cnt}, значение листа: {y[indices].sum() / y[indices].shape[0]}")
+                print("\n********Построение нового узла")
+                print(f"\n Число листьев = {self.leafs_cnt}, значение листа: {np.mean(y[indices])}")
 
             # тогда возращаем вероятность первого класса
-            return Node(value = y[indices].sum() / y[indices].shape[0])
+            return Node(value = np.mean(y[indices]))
         
         # Если это узел, то разбиваем        
         best_split = self.get_best_split(pd.DataFrame(X[indices]), pd.Series(y[indices]))
+        if self.verbose:
+            print("\n*********Разделение узла")
+            print(f"Массив X:\n{X}\nbest_split: {best_split}")
+
+        # На случай, если нет подходящего разбиения, назначает лист
+        if best_split[0] == '':
+            return Node(value = np.mean(y[indices]))
+
         left_msk = X[indices, best_split[0]] <= best_split[1]
         
-        if self.verbose:
-            print(f"best_split: {best_split}")
             
         '''создание ветвления добавляет один потенциальный лист при заходе в левую ветку,
         но при заходе в правую - потенциальное количество листов прежнее
         Т.е. для левой ветки количество потенциальных листьев = depth, 
         но для правой = depth - 1'''
-        left_tree = self.build_tree(X, y, indices[left_msk], depth + 1, features, leaf_potential + 1)
-        right_tree = self.build_tree(X, y, indices[~left_msk], depth + 1, features, leaf_potential)
+        left_tree = self.build_tree(X, y, indices[left_msk], depth + 1, features)
+        right_tree = self.build_tree(X, y, indices[~left_msk], depth + 1, features)
         
         # Запись в Node
         return Node(feature=features[best_split[0]],
@@ -161,7 +178,6 @@ class MyTreeClf():
             sum_leafs = left[1] + right[1]
             return (n_leafs, sum_leafs)
         
-
     def predict(self, X: pd.DataFrame) -> pd.Series:
         return 1 * (self.predict_proba(X) > 0.5)
 
@@ -187,9 +203,25 @@ class MyTreeClf():
             if np.any(~left_msk):
                 self.traverse_tree(X, tree.right, prediction, indices[~left_msk])
 
+    def get_separators(self, X: np.ndarray, y: np.ndarray):
+        # если количество строк в X больше, чем bins, используем bins
+        # X.shape[0] = количеству разделителей + 1
+        if X.shape[0] > self.bins:
+            # используем гистограмму
+            for column_number in range(X.shape[1]):
+                hist, bin_edges = np.histogram(X[:, column_number], bins=self.bins)
+                self.thresholds[column_number] = bin_edges[1:-1]
+        else:
+            for column_number in range(X.shape[1]):
+                sorted_values = np.unique(X[:, column_number])
+                self.thresholds[column_number] = (sorted_values[:-1] + sorted_values[1:]) / 2
+
     @staticmethod
     def enthropy(y):
-        p1 = y.sum() / y.shape[0]
+        if y.size:
+            p1 = y.sum() / y.shape[0]
+        else:
+            p1 = 0
         p0 = 1 - p1
         return 0 if p0 * p1 == 0 else -p0 * np.log2(p0) - p1 * np.log2(p1)
     

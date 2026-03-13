@@ -17,13 +17,16 @@ class MyTreeClf():
                  min_samples_split=2,
                  max_leafs=20,
                  verbose=False,
-                 bins=None):
+                 bins=None,
+                 criterion='entropy'):
         self.max_depth = max_depth          # максимальная глубина дерева
         self.min_samples_split = min_samples_split   # мин допустимое кол-во объектов в листе для разбиения
         self.max_leafs = max_leafs          # макс разрешённое кол-во листов в дереве
         self.leafs_cnt = 0                  # Текущее количество листьев в дереве
         self.verbose = verbose              # Вывод на печать промежуточных результатов
         self.bins = bins                    # Количество бинов на гистограмме для фичи
+        self.criterion = criterion          # Метод расчёта неопределённости (entropy или gini)
+        self.fi = {}                        # Словарь для учёта важностей фичей (feature importance)
 
     def __str__(self):
         description = []
@@ -50,8 +53,8 @@ class MyTreeClf():
         X = X.reset_index(drop=True)
         y = y.reset_index(drop=True)
 
-        # Исходная энтропия
-        S0 = self.enthropy(y)
+        # Исходная неопределённость
+        S0 = getattr(self, self.criterion)(y)
 
         #print(f"S0 = {S0}")
         for column in X:
@@ -67,8 +70,8 @@ class MyTreeClf():
                 right_idx = X[column] > sep     # bool-индексы элементов справа
                 left_num = left_idx.sum()       # количество элементов слева
                 right_num = right_idx.sum()     # и справа
-                S_left = self.enthropy(y[left_idx])
-                S_right = self.enthropy(y[right_idx])
+                S_left = getattr(self, self.criterion)(y[left_idx])
+                S_right = getattr(self, self.criterion)(y[right_idx])
                 
                 #print(f"S1 = {S_left}, S2 = {S_right}")
                 # Прирост информации
@@ -97,6 +100,10 @@ class MyTreeClf():
 
         # Обнуление на случай повторного вызова fit
         self.leafs_cnt = 0 
+        self.fi = {}
+        for col_name in column_names:
+            self.fi[col_name] = 0
+
         self.tree = self.build_tree(X=X,
                                     y=y,
                                     indices=np.arange(X.shape[0]),
@@ -150,6 +157,8 @@ class MyTreeClf():
             print("\n*********Разделение узла")
             print(f"Массив X:\n{X}\nbest_split: {best_split}")
 
+        self.fi[features[best_split[0]]] += indices.shape[0] / X.shape[0] * best_split[2]
+
         left_msk = X[indices, best_split[0]] <= best_split[1]
         
             
@@ -171,13 +180,13 @@ class MyTreeClf():
 
     def printing_node(self, node: Node, side: str=None, depth: int=0):
         if node.value is not None:
-            if self.verbose:
-                print(f"{'\t' * depth} leaf_{side} = {node.value}")
+            # if self.verbose:
+            print(f"{'\t' * depth} leaf_{side} = {node.value}")
 
             return (1, node.value)
         else:
-            if self.verbose:
-                print(f"{'\t' * depth} {node.feature} > {node.threshold}:")
+            # if self.verbose:
+            print(f"{'\t' * depth} {node.feature} > {node.threshold}:")
 
             left = self.printing_node(node.left, side='left', depth=depth + 1)
             right = self.printing_node(node.right, side='right', depth=depth + 1)
@@ -224,11 +233,20 @@ class MyTreeClf():
                 self.thresholds[column_number] = (sorted_values[:-1] + sorted_values[1:]) / 2
 
     @staticmethod
-    def enthropy(y):
+    def entropy(y):
         if y.size:
             p1 = y.sum() / y.shape[0]
         else:
             p1 = 0
         p0 = 1 - p1
         return 0 if p0 * p1 == 0 else -p0 * np.log2(p0) - p1 * np.log2(p1)
+    
+    @staticmethod
+    def gini(y):
+        if y.size:
+            p1 = y.sum() / y.shape[0]
+        else:
+            p1 = 0
+        p0 = 1 - p1
+        return 1 - (p0**2 + p1**2)
     

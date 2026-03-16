@@ -77,39 +77,68 @@ class MyTreeReg():
 
         self.tree = self.build_tree(X, y, features, np.arange(X.shape[0]), 1)
 
-    def build_tree(self, X: pd.DataFrame, y: pd.Series, features: list, indices: np.ndarray, depth: int):
+    def build_tree(self, X: np.ndarray, y: np.ndarray, features: list, indices: np.ndarray, depth: int, potential: int=2):
         # Условие на лист
         condition_1 = depth > self.max_depth                                # по глубине (без листьев)
-        condition_2 = y.size < max(2, self.min_samples_split)               # по числу элементов в узле, но не меньше 1
-        condition_3 = self.leafs_cnt + 1 >= self.max_leafs and depth > 1    # по числу листьев
+        condition_2 = y[indices].size < max(2, self.min_samples_split)               # по числу элементов в узле, но не меньше 1
+        condition_3 = self.leafs_cnt + potential > self.max_leafs and depth > 1    # по числу листьев
         
         
         if condition_1 or condition_2 or condition_3:
             if self.verbose:  
                 print("*********\nУсловия на лист")  
-                print(f"Условие по глубине: {condition_1}, Условие по числу элементов: {condition_2}, Условие по числу листов: {condition_3}")
+                print(f"Условие по глубине: {condition_1},\nУсловие по числу элементов: {condition_2},\nУсловие по числу листов: {condition_3}")
+                print(f"{self.leafs_cnt + 1}-ый лист, значение {y[indices].mean()}")
             
             # Если условие выполняется, то это лист
             self.leafs_cnt += 1
 
             return Node(value=y[indices].mean())
         
-        best_split = self.get_best_split(X, y, features)
+        best_split = self.get_best_split(X[indices], y[indices], features)
 
         left_msk = X[indices, features.index(best_split[0])] <= best_split[1]
+        condition_4 = len(indices[left_msk]) == 0 or len(indices[~left_msk]) == 0
         if self.verbose:
             print('**************\nРазбиение узла')
-            print(f"фича: {best_split[0]}, разделитель {best_split[1]}")
-            print(f"left_msk = {left_msk}")
+            print(f"best_split: {best_split}")
+            
+            print("*********\nУсловия на лист")  
+            print(f"Условие на пустое разбиение: {condition_4}")
+            print(f"{self.leafs_cnt + 1}-ый лист, значение {y[indices].mean()}")
 
-        tree_left = self.build_tree(X, y, features, indices[left_msk], depth + 1)
-        tree_right = self.build_tree(X, y, features, indices[~left_msk], depth + 1)
+        if condition_4:
+            '''Это лист.
+            Если get_best_split возвращает такое разбиение, что вся выборка относится либо к левому, либо к правому дереву,
+            то когда уйдём в построение этой части, мы получаем ту же самую ситуацию. Будет зацикленная рекурсия.
+            Поэтому пришлось проверять это условие здесь'''
+            self.leafs_cnt += 1
+            return Node(value = y[indices].mean())
+
+        tree_left = self.build_tree(X, y, features, indices[left_msk], depth + 1, potential + 1)
+        tree_right = self.build_tree(X, y, features, indices[~left_msk], depth + 1, potential)
         
         return Node(feature=best_split[0],
                     threshold=best_split[1],
                     tree_left=tree_left,
                     tree_right=tree_right)
+               
 
+    def print_tree(self, tree: Node=None, side: str="", depth: int=1):
+        if not tree:
+            # Дерево не передано в качестве аргумента
+            tree = self.tree
+        if tree.value:
+            # Это лист
+            print(f"{'   '*depth}leaf_{side} = {tree.value}")
+            return (1, tree.value)
+        else:
+            # Узел
+            print(f"{depth}{'   '*depth}{tree.feature}>{tree.threshold}")
+            left = self.print_tree(tree.tree_left, 'left', depth + 1)     # Отрисовка дерева слева
+            right = self.print_tree(tree.tree_right, 'right', depth + 1)   # Отрисовка дерева справа
+
+            return (left[0] + right[0], left[1] + right[1])
 
     @staticmethod
     def mse(y: np.ndarray) -> int:

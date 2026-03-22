@@ -140,6 +140,28 @@ class MyTreeReg():
 
             return (left[0] + right[0], left[1] + right[1])
 
+    def predict(self, X: np.ndarray, tree: Node=None, indices: list=None, features: list=None, prediction: np.ndarray=None) -> pd.Series:
+        # При первом вызове возможна передача X как pd.DataFrame
+        if isinstance(X, pd.DataFrame):
+            tree = self.tree
+            features = X.columns.to_list()
+            indices = np.arange(X.shape[0])
+            prediction = np.empty(X.shape[0])
+            X = X.to_numpy()
+
+        # Обход по дереву
+        if tree.value is not None:      # Это лист
+            prediction[indices] = tree.value
+        else:                           # Идём по дереву
+            left_msk = X[indices, features.index(tree.feature)] <= tree.threshold
+
+            if np.any(left_msk):
+                self.predict(X, tree.tree_left, indices[left_msk], features, prediction)
+            if np.any(~left_msk):
+                self.predict(X, tree.tree_right, indices[~left_msk], features, prediction)
+        
+        return pd.Series(prediction)
+
     @staticmethod
     def mse(y: np.ndarray) -> int:
         return ((y - y.mean())**2).mean()

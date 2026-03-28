@@ -131,13 +131,19 @@ class MyTreeReg():
         
         if self.bins:
             for column_idx in range(X.shape[1]):
-                if (np.any((X[indices, column_idx].min() < self.thresholds[column_idx]) & 
-                           (X[indices, column_idx].max() > self.thresholds[column_idx]))):
+                condition_5 = (np.any((X[indices, column_idx].min() < self.thresholds[column_idx]) & 
+                                      (X[indices, column_idx].max() > self.thresholds[column_idx])))
+                if condition_5:
                     # Значит, элементы X в разных бинах
                     break
-                else:
-                    # Это лист
-                    return Node(value = y[indices].mean())
+            else:
+                # Это лист
+                print("*********\nУсловия на лист")  
+                print(f"Условие на элементы в бине: {condition_5}")
+                print(f"{self.leafs_cnt + 1}-ый лист, значение {y[indices].mean()}")
+                
+                self.leafs_cnt += 1
+                return Node(value = y[indices].mean())
 
         # Учёто важности фичи
         self.fi[best_split[0]] += indices.size / X.shape[0] * best_split[2]
@@ -201,10 +207,10 @@ class MyTreeReg():
                 self.thresholds[column_idx] = (unique_sorted[1:] + unique_sorted[:-1]) / 2
             else:
                 hist, bin_edges = np.histogram(X[:, column_idx], bins=self.bins)
-                self.thresholds[column_idx] = bin_edges
+                self.thresholds[column_idx] = bin_edges[1:-1]
 
     @staticmethod
-    def mse(y: np.ndarray) -> int:
+    def mse(y: np.ndarray) -> float:
         if y.size:
             return ((y - y.mean())**2).mean()
         else:

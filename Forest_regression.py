@@ -47,21 +47,35 @@ class MyForestReg():
 
         self.trees = [None] * self.n_estimators      # Список для деревьев
         random.seed(self.random_state)
-        
+
         for tree_number in range(self.n_estimators):
             cols_idx = random.sample(X.columns.to_list(), cols_cnt)
-            rows_idx = random.sample(range(rows_cnt), rows_cnt)
+            rows_idx = random.sample(range(X.shape[0]), rows_cnt)
 
             # Обучение дерева
             tree = MyTreeReg(max_depth=self.max_depth,
-                                     min_samples_split=self.min_samples_split,
-                                     max_leafs=self.max_leafs,
-                                     bins=self.bins)
+                             min_samples_split=self.min_samples_split,
+                             max_leafs=self.max_leafs,
+                             bins=self.bins,
+                             verbose=True)
             tree.fit(X.loc[X.index[rows_idx], cols_idx], y.loc[y.index[rows_idx]])
+            #tree.fit(X.iloc[rows_idx][cols_idx], y.iloc[rows_idx])
 
             self.leafs_cnt += tree.leafs_cnt            
             self.trees[tree_number] = tree
 
             if self.verbose:
                 print(f"cols_cnt={cols_cnt}, rows_cnt={rows_cnt},\ncols_idx={cols_idx},\nrows_idx={rows_idx}")
+                tree.print_tree()
         
+    def predict(self, X: pd.DataFrame) -> pd.Series:
+        prediction = np.empty(X.shape[0])
+
+        for tree in self.trees:
+            tree_prediction = tree.predict(X)
+            prediction += tree_prediction
+
+            if self.verbose:
+                print(f"Предсказание дерева: {tree_prediction}")
+
+        return prediction / self.n_estimators

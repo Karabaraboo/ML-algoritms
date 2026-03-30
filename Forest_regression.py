@@ -80,9 +80,9 @@ class MyForestReg():
             if self.oob_score:
                 if tree_number == 0:
                     y_predict = np.zeros(X.shape[0])             # Массив для суммирования предсказаний
-                    trees_oob = np.ones(X.shape[0])                         # Количество деревьев out-of-bag в каждой строке
+                    trees_oob = np.zeros(X.shape[0])                         # Количество деревьев out-of-bag в каждой строке
 
-                oob_msk = np.isin(np.arange(X.shape[0]), rows_idx)          # Индексы строк, не вошедшие в дерево
+                oob_msk = ~np.isin(np.arange(X.shape[0]), rows_idx)          # Индексы строк, не вошедшие в дерево
                 y_predict[oob_msk] += tree.predict(X[oob_msk][cols_name]).to_numpy()      # Предсказание на оставшихся строках. X.drop(X.index[rows_idx])
                 trees_oob[oob_msk] += 1            # Увеличение числа деревьев в строках, которые oob
 
@@ -94,11 +94,11 @@ class MyForestReg():
                     print(f"oob_idx:\n{oob_msk},\ny_predict:\n{y_predict},\ntrees_oob:\n{trees_oob}")
 
         if self.oob_score:
-            y_predict = np.where(trees_oob != 0, y_predict / trees_oob, np.nan) # Осреднение предсказаний по количеству деревьев
+            y_predict = np.divide(y_predict, trees_oob, out=np.full_like(y_predict, np.nan), where=trees_oob != 0) # Осреднение предсказаний по количеству деревьев
             
             # Расчёт метрики oob_score
-            oob_score_idx = ~np.isnan(y_predict)        # Индексы элементов, которые не nan
-            self.oob_score_ = getattr(self, self.oob_score)(y_predict[oob_score_idx], y.iloc[oob_score_idx])    # y.drop(y.index[rows_idx])
+            oob_score_msk = ~np.isnan(y_predict)        # Индексы элементов, которые не nan
+            self.oob_score_ = getattr(self, self.oob_score)(y_predict[oob_score_msk], y[oob_score_msk])    # y.drop(y.index[rows_idx])
         
     def predict(self, X: pd.DataFrame) -> pd.Series:
         prediction = np.zeros(X.shape[0])

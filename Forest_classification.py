@@ -48,6 +48,7 @@ class MyForestClf():
 
         self.trees = [None] * self.n_estimators             # Список деревьев
         
+        random.seed(self.random_state)
         for tree_number in range(self.n_estimators):
             # Отбор фичей и сэмплов для дерева
             cols_names = random.sample(features, cols_cnt)

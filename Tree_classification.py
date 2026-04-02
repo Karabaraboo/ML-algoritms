@@ -110,7 +110,7 @@ class MyTreeClf():
                                     depth=1, 
                                     features=column_names)
 
-    def build_tree(self, X: np.ndarray, y: np.ndarray, indices: np.ndarray, depth: int, features: str):
+    def build_tree(self, X: np.ndarray, y: np.ndarray, indices: np.ndarray, depth: int, features: str, potential: int=2):
         if self.verbose:
             print(f"indices = {indices}")
             print('********* \n условия в build_tree')
@@ -120,14 +120,14 @@ class MyTreeClf():
             print(f"depth > self.max_depth: {depth > self.max_depth}")
             print(f"y.shape[0] < self.min_samples_split: {y[indices].shape[0] < self.min_samples_split}")
             print(f"self.leafs_cnt > self.max_leafs: {self.leafs_cnt > self.max_leafs}")
-            print(f"self.leafs_cnt + 1 >= self.max_leafs: {self.leafs_cnt + 1 >= self.max_leafs}")
+            print(f"self.leafs_cnt + potential >= self.max_leafs: {self.leafs_cnt + potential >= self.max_leafs}")
 
         # Если это лист
         if (X[indices].shape[0] < 2 or                                              # Если выборка содержит 1 элемент
             y[indices].sum() == y[indices].shape[0] or y[indices].sum() == 0 or     # или в ней один класс
             depth > self.max_depth or                                               # превышена допустимая глубина дерева
             y[indices].shape[0] < self.min_samples_split or                         # число элементов меньше минимально допустимого
-            self.leafs_cnt + 1 >= self.max_leafs and depth > 1):                    # число листов больше допустимого
+            self.leafs_cnt + potential >= self.max_leafs and depth > 1):                    # число листов больше допустимого
             # Последнее условие - число созданных листьев и потенциальных (по одному на каждый уровень выше)
 
             # тогда это лист
@@ -149,6 +149,7 @@ class MyTreeClf():
                     break
             else:
                 # Если таких элементов нет (всё в одном бине), то это лист
+                self.leafs_cnt += 1
                 return Node(value = np.mean(y[indices]))
 
         # Если это узел, то разбиваем      
@@ -166,8 +167,8 @@ class MyTreeClf():
         но при заходе в правую - потенциальное количество листов прежнее
         Т.е. для левой ветки количество потенциальных листьев = depth, 
         но для правой = depth - 1'''
-        left_tree = self.build_tree(X, y, indices[left_msk], depth + 1, features)
-        right_tree = self.build_tree(X, y, indices[~left_msk], depth + 1, features)
+        left_tree = self.build_tree(X, y, indices[left_msk], depth + 1, features, potential + 1)
+        right_tree = self.build_tree(X, y, indices[~left_msk], depth + 1, features, potential)
         
         # Запись в Node
         return Node(feature=features[best_split[0]],

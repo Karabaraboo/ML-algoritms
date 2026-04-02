@@ -181,12 +181,12 @@ class MyTreeClf():
     def printing_node(self, node: Node, side: str=None, depth: int=0):
         if node.value is not None:
             # if self.verbose:
-            print(f"{'\t' * depth} leaf_{side} = {node.value}")
+            print(f"{'   ' * depth} leaf_{side} = {node.value}")
 
             return (1, node.value)
         else:
             # if self.verbose:
-            print(f"{'\t' * depth} {node.feature} > {node.threshold}:")
+            print(f"{'   ' * depth} {node.feature} > {node.threshold}:")
 
             left = self.printing_node(node.left, side='left', depth=depth + 1)
             right = self.printing_node(node.right, side='right', depth=depth + 1)

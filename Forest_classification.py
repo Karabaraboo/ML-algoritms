@@ -30,6 +30,7 @@ class MyForestClf():
 
         # Прочие параметры
         self.random_state = random_state
+        self.fi = {}                            # словарь с важностью фичей
 
     def __str__(self):
         discription = []
@@ -41,6 +42,7 @@ class MyForestClf():
     
     def fit(self, X: pd.DataFrame, y: pd.Series):
         features = X.columns.to_list()
+        self.fi = dict.fromkeys(features, 0)
 
         # Количество фич и сэмплов для построения дерева
         cols_cnt = round(self.max_features * X.shape[1])
@@ -60,9 +62,14 @@ class MyForestClf():
                              bins=self.bins, 
                              criterion=self.criterion)
             tree.fit(X.iloc[rows_idx][cols_names], y.iloc[rows_idx])
-
+            
+            # Запись дерева и подсчёт суммарного числа листов
             self.trees[tree_number] = tree
             self.leafs_cnt += tree.leafs_cnt
+
+            # Важность фичей
+            for feature in cols_names:
+                self.fi[feature] += tree.fi[feature] * rows_cnt / X.shape[0]
 
     def predict(self, X: pd.DataFrame, type: str='mean') -> pd.Series:
         # type = 'mean' - усредение показаний деревьев

@@ -64,4 +64,31 @@ class MyForestClf():
             self.trees[tree_number] = tree
             self.leafs_cnt += tree.leafs_cnt
 
+    def predict(self, X: pd.DataFrame, type: str='mean') -> pd.Series:
+        # type = 'mean' - усредение показаний деревьев
+        # type = 'vote' - наиболее вероятное предсказание деревьев
+        if type == 'mean':
+            prediction = self.predict_proba(X)
+        elif type == 'vote':
+            prediction = self.predict_label(X)
+        return np.where(prediction > 0.5, 1, 0)
+            
+    def predict_proba(self, X: pd.DataFrame) -> pd.Series:
+        X = X.reset_index()
+
+        prediction = np.zeros(X.shape[0])
+        for tree in self.trees:
+            prediction += tree.predict_proba(X)
+
+        return prediction / self.n_estimators
+    
+    def predict_label(self, X: pd.DataFrame) -> pd.Series:
+        X = X.reset_index()
+
+        prediction = np.zeros(X.shape[0])
+        for tree in self.trees:
+            prediction += tree.predict(X)
+        
+        return prediction / self.n_estimators
+
 

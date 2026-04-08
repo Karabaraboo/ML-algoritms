@@ -196,9 +196,11 @@ class MyTreeClf():
             return (n_leafs, sum_leafs)
         
     def predict(self, X: pd.DataFrame) -> pd.Series:
+        # Возвращает класс
         return 1 * (self.predict_proba(X) > 0.5)
 
     def predict_proba(self, X: pd.DataFrame) -> pd.Series:
+        # Возвращает вероятность класса 1
         # Пустой массив для записи предсказаний
         prediction = np.empty(X.shape[0], dtype=float)
         indices = np.arange(X.shape[0])

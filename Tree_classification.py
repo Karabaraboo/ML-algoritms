@@ -208,7 +208,7 @@ class MyTreeClf():
 
         return pd.Series(prediction)
         
-    def traverse_tree(self, X: pd.DataFrame, tree: Node, prediction: np.ndarray, indices: np.ndarray) -> np.ndarray:
+    def traverse_tree(self, X: pd.DataFrame, tree: Node, prediction: np.ndarray, indices: np.ndarray):
         # prediction - это один и тот же объект в памяти на каждой итерации, т.к. передача по ссылке
         if tree.value is not None:
             prediction[indices] = tree.value

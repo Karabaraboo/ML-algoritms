@@ -41,4 +41,12 @@ class MyBaggingReg():
             #print(type(instance_estimator))
             instance_estimator.fit(X.iloc[sample_rows_idx], y.iloc[sample_rows_idx])
             self.estimators.append(instance_estimator)
+
+    def predict(self, X: pd.DataFrame) -> pd.Series:
+        prediction = np.zeros(X.shape[0])
+
+        for estimator in self.estimators:
+            prediction += estimator.predict(X) / self.n_estimators
+
+        return prediction
     
